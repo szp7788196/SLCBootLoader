@@ -1,5 +1,6 @@
 #include "tcp.h"
 #include "usart.h"
+#include "common.h"
 
 pTcp tcp;
 
@@ -43,13 +44,13 @@ unsigned char tcp_connect(pTcp *tcp,char *remote_ip, char *remote_port)
 	if(ret == 1)
 	{
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp connect success.\r\n", 22,1000);
+		UsartSendString(USART1, "tcp connect success.\r\n", 22);
 #endif
 	}
 	else
 	{
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp connect failed.\r\n", 21,1000);
+		UsartSendString(USART1, "tcp connect failed.\r\n", 21);
 #endif
 	}
 	return ret;
@@ -72,13 +73,13 @@ unsigned char tcp_close(pTcp *tcp)
 	if(ret == 1)
 	{
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp disconnect success.\r\n", 25,1000);
+		UsartSendString(USART1, "tcp disconnect success.\r\n", 25);
 #endif
 	}
 	else
 	{
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp disconnect failed.\r\n", 24,1000);
+		UsartSendString(USART1, "tcp disconnect failed.\r\n", 24);
 #endif
 	}
 	return ret;
@@ -101,13 +102,13 @@ unsigned short tcp_send(pTcp *tcp, unsigned char *buf, unsigned short len)
     if(ret == 1)
 	{
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp send success.\r\n", 19,1000);
+		UsartSendString(USART1, "tcp send success.\r\n", 19);
 #endif
 	}
     else
     {
 #ifdef DEBUG_LOG
-		HAL_UART_Transmit(&DEBUG_UART_HANDLER, "tcp send failed.\r\n", 18,1000);
+		UsartSendString(USART1, "tcp send failed.\r\n", 18);
 #endif
         len = 0;
     }

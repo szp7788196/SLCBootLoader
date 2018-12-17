@@ -12,7 +12,7 @@ unsigned char net_temp_data_rx_buf[8];
 unsigned char BG96_InitStep1(pBg96 *bg96)
 {
 	unsigned char ret = 0;
-	
+
 	(*bg96) = (pBg96)mymalloc(sizeof(Bg96));
 	if((*bg96) == NET_NULL)
 	{
@@ -20,7 +20,7 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
 	}
 
 	(*bg96)->init_ok = 0;
-	
+
 	(*bg96)->USARTx = USART2;
 
 	(*bg96)->rx_cmd_buf = (char *)mymalloc(sizeof(char) * CMD_DATA_BUFFER_SIZE);
@@ -40,6 +40,7 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
 	(*bg96)->net_data_id = 0;
 	(*bg96)->break_out_wait_cmd = 0;
 	(*bg96)->rx_cnt = 0;
+	(*bg96)->imei = NULL;
 
 	(*bg96)->bg96_mode 						= NET_MODE;
 	(*bg96)->cip_mux_mode					= SIGNLE;
@@ -69,7 +70,7 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
 	(*bg96)->set_AT_UART 					= bg96_set_AT_UART;
 	(*bg96)->get_AT_CPIN 					= bg96_get_AT_CPIN;
 	(*bg96)->get_AT_CSQ 					= bg96_get_AT_CSQ;
-	
+
     (*bg96)->set_AT_QCFG1 					= bg96_set_AT_QCFG1;
     (*bg96)->set_AT_QCFG2 					= bg96_set_AT_QCFG2;
     (*bg96)->set_AT_QCFG3 					= bg96_set_AT_QCFG3;
@@ -79,20 +80,25 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
     (*bg96)->set_AT_QIACT 					= bg96_set_AT_QIACT;
 	(*bg96)->get_AT_QIACT 					= bg96_get_AT_QIACT;
     (*bg96)->get_AT_QISTATE 				= bg96_get_AT_QISTATE;
-	
+
     (*bg96)->set_AT_QIOPEN 					= bg96_set_AT_QIOPEN;
     (*bg96)->set_AT_QICLOSE 				= bg96_set_AT_QICLOSE;
     (*bg96)->set_AT_QISEND 					= bg96_set_AT_QISEND;
 	(*bg96)->get_AT_QISEND					= bg96_get_AT_QISEND;
 	(*bg96)->get_AT_QIDNSGIP 				= bg96_get_AT_QIDNSGIP;
     (*bg96)->get_AT_QPING 					= bg96_get_AT_QPING;
-	
-	
+	(*bg96)->get_AT_GSN 					= bg96_get_AT_GSN;
+
 	(*bg96)->set_AT_QGPS					= bg96_set_AT_QGPS;
 	(*bg96)->set_AT_QGPSLOC 				= bg96_set_AT_QGPSLOC;
 	(*bg96)->set_AT_QGPSEND					= bg96_set_AT_QGPSEND;
-	
+
 	(*bg96)->set_AT_QNTP					= bg96_set_AT_QNTP;
+	
+	(*bg96)->set_AT_QHTTPCFG				=bg96_set_AT_QHTTPCFG;
+	(*bg96)->set_AT_QHTTPURL				=bg96_set_AT_QHTTPURL;
+	(*bg96)->get_AT_QHTTPGET				=bg96_get_AT_QHTTPGET;
+	(*bg96)->get_AT_QHTTPREAD				=bg96_get_AT_QHTTPREAD;
 
     (*bg96)->clear_rx_cmd_buffer 			= bg96_clear_rx_cmd_buffer;
     (*bg96)->get_char 						= bg96_get_char;
@@ -101,6 +107,7 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
     (*bg96)->print_cmd 						= bg96_print_cmd;
     (*bg96)->wait_cmd1 						= bg96_wait_cmd1;
     (*bg96)->wait_cmd2 						= bg96_wait_cmd2;
+	(*bg96)->wait_cmd3 						= bg96_wait_cmd3;
     (*bg96)->wait_bg96_mode 				= bg96_wait_bg96_mode;
 
 	(*bg96)->uart_interrupt_event 			= bg96_uart_interrupt_event;
@@ -120,20 +127,22 @@ void BG96_UnInit(pBg96 *bg96)
 	myfree(*bg96);
 }
 
+u8 signal = 0;
 unsigned char BG96_InitStep2(pBg96 *bg96)
 {
 	static u8 hard_inited = 0;
 	u8 ret = 0;
 	u8 fail_time = 0;
+	u8 qiact_fail_times = 0;
 	u8 buf[64];
 
 	if(hard_inited == 0)
 	{
 		(*bg96)->hard_init(bg96);
 	}
-	
+
 	RE_HARD_RESET:
-	
+
 	(*bg96)->hard_reset(bg96);
 	delay_ms(10000);
 
@@ -147,9 +156,9 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 	(*bg96)->bg96_mode = NET_MODE;
 	(*bg96)->cip_mux_mode = SIGNLE;
 	(*bg96)->last_time = GetSysTick1ms();
-	
+
 //	(*bg96)->set_AT_UART(bg96,115200);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT(bg96))
 	{
@@ -160,7 +169,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_ATE(bg96, 0))
 	{
@@ -171,7 +180,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->get_AT_CPIN(bg96))
 	{
@@ -182,18 +191,18 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
-	fail_time = 0;
-	while(!(*bg96)->set_AT_QCFG1(bg96))
-	{
-		fail_time ++;
-		if(fail_time >= 3)
-		{
-			goto RE_HARD_RESET;
-		}
-	}
-	delay_ms(100);
-	
+
+//	fail_time = 0;
+//	while(!(*bg96)->set_AT_QCFG1(bg96))
+//	{
+//		fail_time ++;
+//		if(fail_time >= 3)
+//		{
+//			goto RE_HARD_RESET;
+//		}
+//	}
+//	delay_ms(100);
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QCFG2(bg96))
 	{
@@ -204,7 +213,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QCFG3(bg96))
 	{
@@ -215,7 +224,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QCFG4(bg96,Operators))
 	{
@@ -226,7 +235,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QCFG5(bg96))
 	{
@@ -237,7 +246,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 //	fail_time = 0;
 //	while((*bg96)->get_AT_CSQ(bg96))
 //	{
@@ -248,7 +257,7 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 //		}
 //	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QICSGP(bg96,Operators))
 	{
@@ -259,9 +268,29 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
+	if(qiact_fail_times >= 3)
+	{
+		qiact_fail_times = 0;
+
+		delay_ms(20000);
+	}
+
 	fail_time = 0;
 	while(!(*bg96)->set_AT_QIACT(bg96))
+	{
+		fail_time ++;
+		if(fail_time >= 1)
+		{
+			signal = (*bg96)->get_AT_CSQ(bg96);
+			qiact_fail_times ++;
+			goto RE_HARD_RESET;
+		}
+	}
+	delay_ms(100);
+
+	fail_time = 0;
+	while(!(*bg96)->get_AT_QIACT(bg96,(char *)buf))
 	{
 		fail_time ++;
 		if(fail_time >= 1)
@@ -270,9 +299,9 @@ unsigned char BG96_InitStep2(pBg96 *bg96)
 		}
 	}
 	delay_ms(100);
-	
+
 	fail_time = 0;
-	while(!(*bg96)->get_AT_QIACT(bg96,(char *)buf))
+	while(!(*bg96)->get_AT_GSN(bg96))
 	{
 		fail_time ++;
 		if(fail_time >= 1)
@@ -291,18 +320,18 @@ void bg96_hard_init(pBg96 *bg96)
 	GPIO_InitTypeDef  GPIO_InitStructure;
 
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC, ENABLE);
-	
+
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
-	
+
 	GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_5 | GPIO_Pin_6;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;  
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
-	
-	BG96_PWREN_HIGH;
+
+	BG96_PWREN_LOW;
 	BG96_PWRKEY_LOW;
 	BG96_RST_LOW;
 }
@@ -311,7 +340,7 @@ void bg96_hard_init(pBg96 *bg96)
 void bg96_hard_enable(pBg96 *bg96)
 {
 	BG96_PWRKEY_HIGH;
-	delay_ms(500);
+	delay_ms(200);
 	BG96_PWRKEY_LOW;
 }
 
@@ -325,56 +354,62 @@ void bg96_hard_disable(pBg96 *bg96)
 
 
 void bg96_hard_reset(pBg96 *bg96)
-{	
+{
 	u8 i = 0;
-	
+
 	RE_START:
-	
-	BG96_RST_HIGH;
-	delay_ms(500);
+	BG96_PWREN_LOW;						//关闭电源
+	delay_ms(300);
+	BG96_PWREN_HIGH;					//打开电源
+
+	delay_ms(100);
+
+	BG96_RST_HIGH;						//硬件复位
+	delay_ms(300);
 	BG96_RST_LOW;
-	
+
+	delay_ms(100);
+
 	if(READ_BG96_STATUS == 1)			//关机状态
 	{
 		(*bg96)->hard_enable(bg96);		//发送开机脉冲
-		
-		while(READ_BG96_STATUS == 1)		//等待检测是否已经开机
+
+		while(READ_BG96_STATUS == 1)	//等待检测是否已经开机
 		{
 			delay_ms(100);
-			
+
 			if((i ++) > 100)
 			{
 				i = 0;
 				break;
 			}
 		}
-		
+
 		return;
 	}
 	else if(READ_BG96_STATUS == 0)		//开机状态
 	{
 		(*bg96)->hard_disable(bg96);	//发送关机脉冲
-		
-		while(READ_BG96_STATUS == 0)			//等待检测是否已经关机
+
+		while(READ_BG96_STATUS == 0)	//等待检测是否已经关机
 		{
 			delay_ms(100);
-			
+
 			if((i ++) > 100)
 			{
 				i = 0;
 				break;
 			}
 		}
-		
+
 		if(READ_BG96_STATUS == 1)
 		{
 			delay_ms(1000);
-			
+
 			goto RE_START;
 		}
 	}
 }
-
 
 unsigned char bg96_send_string(pBg96 *bg96,USART_TypeDef* USARTx,unsigned char *str, unsigned short len)
 {
@@ -388,13 +423,18 @@ unsigned char bg96_send_string(pBg96 *bg96,USART_TypeDef* USARTx,unsigned char *
 		memcpy(Usart2TxBuf,str,len);
 		Usart2SendLen = len;
 	}
+//	else if(USARTx == UART4)
+//	{
+//		memcpy(Usart4TxBuf,str,len);
+//		Usart4SendLen = len;
+//	}
 	else
 	{
 		return 0;
 	}
-	
+
 	USART_ITConfig(USARTx, USART_IT_TC, ENABLE);
-	
+
 	return 1;
 }
 
@@ -552,7 +592,7 @@ unsigned char bg96_set_AT_ATE(pBg96 *bg96,char cmd)
 unsigned char bg96_set_AT_UART(pBg96 *bg96,unsigned int baud_rate)
 {
 	unsigned char ret = 0;
-	
+
 //	RE_SET:
 //    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
 //    (*bg96)->clear_rx_cmd_buffer(bg96);
@@ -707,7 +747,7 @@ unsigned char bg96_set_AT_QCFG4(pBg96 *bg96,unsigned char operators)
 	unsigned char parm1 = 0;
 	unsigned char parm2 = 0;
 	unsigned char parm3 = 0;
-	
+
 	switch(operators)
 	{
 		case 0:			//移动卡
@@ -715,23 +755,23 @@ unsigned char bg96_set_AT_QCFG4(pBg96 *bg96,unsigned char operators)
 			parm2 = 10;
 			parm3 = 80;
 		break;
-		
+
 		case 1:			//联通卡
 			parm1 = 0;
 			parm2 = 10;
 			parm3 = 80;
 		break;
-		
+
 		case 2:			//电信卡
 			parm1 = 0;
 			parm2 = 10;
 			parm3 = 10;
 		break;
-		
+
 		default:
 		break;
 	}
-	
+
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
 	printf("AT+QCFG=\"band\",%d,%d,%d\r\n",parm1,parm2,parm3);
@@ -773,24 +813,24 @@ unsigned char bg96_set_AT_QCFG5(pBg96 *bg96)
 unsigned char bg96_set_AT_QICSGP(pBg96 *bg96,unsigned char operators)
 {
 	unsigned char ret = 0;
-	
+
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
-	
+
 	switch(operators)
 	{
 		case 0:		//移动卡
 			printf("AT+QICSGP=1,1,\"CMNBIOT\",\"\",\"\",0\r\n");
 		break;
-		
+
 		case 1:		//联通卡
-			printf("AT+QICSGP=1,1,\"CMNBIOT\",\"\",\"\",0\r\n");
+			printf("AT+QICSGP=1,1,\"NBIOT\",\"\",\"\",0\r\n");
 		break;
-		
+
 		case 2:		//电信卡
 			printf("AT+QICSGP=1,1,\"CTND\",\"\",\"\",0\r\n");
 		break;
-		
+
 		default:
 		break;
 	}
@@ -855,17 +895,17 @@ unsigned char bg96_get_AT_QIACT(pBg96 *bg96,char *list)
 BG96_STATE_E bg96_get_AT_QISTATE(pBg96 *bg96)
 {
 	u8 pos1 = 0;
-	
+
 	BG96_STATE_E ret = GET_FAILED;
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
     printf("AT+QISTATE?\r\n");
-    if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_2S) == RECEIVED)
+    if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_5S) == RECEIVED)
     {
         if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "+QISTATE") != -1)
 		{
 			pos1 = MyStrstr((u8 *)(*bg96)->rx_cmd_buf, "\"uart1\"", (*bg96)->rx_cnt, 7);
-			
+
 			if(pos1 != 0xFFFF)
 			{
 				switch((*bg96)->rx_cmd_buf[pos1 - 8] - 0x30)
@@ -873,25 +913,25 @@ BG96_STATE_E bg96_get_AT_QISTATE(pBg96 *bg96)
 					case 0:
 						ret = INITIAL;
 					break;
-						
+
 					case 1:
 						ret = OPENING;
 					break;
-					
+
 					case 2:
 						ret = CONNECTED;
 					break;
-					
+
 					case 3:
 						ret = LISTENING;
 					break;
-					
+
 					case 4:
 						ret = CLOSING;
 					break;
-					
+
 					default:
-						
+
 					break;
 				}
 			}
@@ -984,7 +1024,7 @@ unsigned char bg96_set_AT_QISEND(pBg96 *bg96,unsigned char *buffer, unsigned int
 	{
 		ret = 255;
 #ifdef DEBUG_LOG
-		
+
 #endif
 	}
     if(state == 1)
@@ -996,11 +1036,12 @@ unsigned char bg96_set_AT_QISEND(pBg96 *bg96,unsigned char *buffer, unsigned int
             if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "SEND OK") != -1)
             {
                 state = 2;
+
+				ret = 1;
             }
         }
 		else
 		{
-
 			ret = 255;
 #ifdef DEBUG_LOG
 
@@ -1017,13 +1058,13 @@ unsigned char bg96_set_AT_QISEND(pBg96 *bg96,unsigned char *buffer, unsigned int
 //				ret = 254;
 //				goto SEND_END;
 //			}
-//			
+//
 //			delay_ms(500);
 //		}
-//		
+//
 //		ret = 1;
 //	}
-	
+
 //	SEND_END:
     (*bg96)->bg96_mode = NET_MODE;
 #ifdef BG96_PRINTF_RX_BUF
@@ -1045,7 +1086,7 @@ unsigned char bg96_get_AT_QISEND(pBg96 *bg96)
 		if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK") != -1)
 		{
 			pos1 = MyStrstr((u8 *)(*bg96)->rx_cmd_buf, "OK", (*bg96)->rx_cnt, 2);
-			
+
 			if((*bg96)->rx_cmd_buf[pos1 - 5] == 0x30 && (*bg96)->rx_cmd_buf[pos1 - 6] == ',')
 			{
 				ret = 1;
@@ -1085,7 +1126,7 @@ unsigned char bg96_get_AT_QIDNSGIP(pBg96 *bg96,const char *domain, unsigned char
         if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "dnsgip") != -1)
         {
 			get_str1((unsigned char *)(*bg96)->rx_cmd_buf, "\"", 5, "\"", 6, (unsigned char *)msg);
-			
+
 			new_len = strlen(msg);
 
 			if(new_len != 0)
@@ -1148,7 +1189,46 @@ unsigned char bg96_get_AT_QPING(pBg96 *bg96,const char *host, char *msg)
             ret = 0;
     }
     (*bg96)->bg96_mode = NET_MODE;
-	
+
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+unsigned char bg96_get_AT_GSN(pBg96 *bg96)
+{
+	unsigned char ret = 0;
+	char buf[32];
+
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+GSN\r\n");
+    if((*bg96)->wait_cmd1(bg96,TIMEOUT_2S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK") != -1)
+		{
+			memset(buf,0,32);
+
+			get_str1((unsigned char *)(*bg96)->rx_cmd_buf, "\r\n", 1, "\r\n", 2, (unsigned char *)buf);
+
+			if(strlen(buf) == 15)
+			{
+				if((*bg96)->imei == NULL)
+				{
+					(*bg96)->imei = (char *)mymalloc(sizeof(char) * 16);
+				}
+				if((*bg96)->imei != NULL)
+				{
+					memset((*bg96)->imei,0,16);
+					memcpy((*bg96)->imei,buf,15);
+
+					ret = 1;
+				}
+			}
+		}
+    }
+    (*bg96)->bg96_mode = NET_MODE;
 #ifdef BG96_PRINTF_RX_BUF
 	(*bg96)->print_rx_buf(bg96);
 #endif
@@ -1182,7 +1262,7 @@ unsigned char bg96_set_AT_QGPS(pBg96 *bg96)
 unsigned char bg96_set_AT_QGPSLOC(pBg96 *bg96,char *msg)
 {
 	unsigned char ret = 0;
-	
+
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
     printf("AT+QGPSLOC=0\r\n");
@@ -1193,7 +1273,7 @@ unsigned char bg96_set_AT_QGPSLOC(pBg96 *bg96,char *msg)
 			if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "QGPSLOC: ") != -1)
 			{
 				get_str1((unsigned char *)(*bg96)->rx_cmd_buf, "+QGPSLOC: ", 1, "\r\n\r\nOK", 1, (unsigned char *)msg);
-				
+
 				ret = 1;
 			}
 		}
@@ -1237,10 +1317,118 @@ unsigned char bg96_set_AT_QNTP(pBg96 *bg96,char *server,unsigned short port,char
         if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, ",\"20") != -1)
 		{
 			get_str1((unsigned char *)(*bg96)->rx_cmd_buf, "\"", 1, "\"", 2, (unsigned char *)msg);
+
+			ret = 1;
+		}
+    }
+    (*bg96)->bg96_mode = NET_MODE;
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+//配置HTTP相关参数
+unsigned char bg96_set_AT_QHTTPCFG(pBg96 *bg96,char *cmd,unsigned char id)
+{
+	unsigned char ret = 0;
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+QHTTPCFG=\"%s\",%d\r\n", cmd,id);
+    if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_2S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK") != -1)
+		{
+			ret = 1;
+		}
+    }
+
+    (*bg96)->bg96_mode = NET_MODE;
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+//配置HTTP的URL
+unsigned char bg96_set_AT_QHTTPURL(pBg96 *bg96,char *url,unsigned char url_len,unsigned char time_out)
+{
+	unsigned char ret = 0;
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+QHTTPURL=%d,%d\r\n", url_len,time_out);
+    if((*bg96)->wait_cmd2(bg96,"CONNECT", TIMEOUT_2S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "CONNECT") != -1)
+		{
+			(*bg96)->clear_rx_cmd_buffer(bg96);
+
+			printf("%s\r\n", url);
+
+			if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_2S) == RECEIVED)
+			{
+				if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK") != -1)
+				{
+					ret = 1;
+				}
+			}
+		}
+    }
+
+    (*bg96)->bg96_mode = NET_MODE;
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+//发送HTTP的GET请求
+unsigned char bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out)
+{
+	unsigned char ret = 0;
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+QHTTPGET=%d\r\n", time_out);
+    if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_2S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK") != -1)
+		{
+			if((*bg96)->wait_cmd2(bg96,"+QHTTPGET:", time_out * 1000 + TIMEOUT_2S) == RECEIVED)
+			{
+				if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "+QHTTPGET: 0") != -1)
+				{
+					ret = 1;
+				}
+			}
+		}
+    }
+
+    (*bg96)->bg96_mode = NET_MODE;
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+//读取HTTP回复数据包
+unsigned char bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out)
+{
+	unsigned char ret = 0;
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+QHTTPREAD=%d\r\n", time_out);
+    if((*bg96)->wait_cmd3(bg96,"+QHTTPREAD: 0", 13,time_out * 1000 + TIMEOUT_2S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "GMT\r\n\r\n") != -1)
+		{
+			memset(buf,0,(*bg96)->rx_cnt);
+			
+			memcpy(buf,(*bg96)->rx_cmd_buf,(*bg96)->rx_cnt);
 			
 			ret = 1;
 		}
     }
+
     (*bg96)->bg96_mode = NET_MODE;
 #ifdef BG96_PRINTF_RX_BUF
 	(*bg96)->print_rx_buf(bg96);
@@ -1334,6 +1522,38 @@ CMD_STATE_E bg96_wait_cmd2(pBg96 *bg96,const char *spacial_target, unsigned int 
     return (*bg96)->cmd_state;
 }
 
+CMD_STATE_E bg96_wait_cmd3(pBg96 *bg96,unsigned char *str,unsigned short str_len, unsigned int wait_time)
+{
+	unsigned int time = GetSysTick1ms();
+	unsigned int time_now = 0;
+	(*bg96)->cmd_state = WAITING;
+
+    while(1)
+    {
+		time_now = GetSysTick1ms();
+        if((time_now - time) > wait_time)
+        {
+            (*bg96)->cmd_state = TIMEOUT;
+            break;
+        }
+		else if(MyStrstr((unsigned char *)(*bg96)->rx_cmd_buf, (unsigned char *)str, (*bg96)->rx_cnt, str_len) != 0xFFFF)
+        {
+            while(GetSysTick1ms() - (*bg96)->last_time < 20);
+				(*bg96)->cmd_state = RECEIVED;
+            break;
+        }
+		else if((*bg96)->break_out_wait_cmd == 1)
+		{
+			(*bg96)->break_out_wait_cmd = 0;
+			break;
+		}
+		delay_ms(10);
+    }
+    (*bg96)->print_cmd(bg96,(*bg96)->cmd_state);
+
+    return (*bg96)->cmd_state;
+}
+
 unsigned char bg96_wait_bg96_mode(pBg96 *bg96,GPRS_MODE_E mode)
 {
 	unsigned char ret = 0;
@@ -1355,10 +1575,10 @@ unsigned char bg96_wait_bg96_mode(pBg96 *bg96,GPRS_MODE_E mode)
 void bg96_get_char(pBg96 *bg96)
 {
 	unsigned char c;
-	
+
 	c = USART_ReceiveData((*bg96)->USARTx);
 	(*bg96)->last_time = GetSysTick1ms();
-	
+
 	if((*bg96)->bg96_mode == CMD_MODE)
 	{
 		(*bg96)->rx_cmd_buf[(*bg96)->rx_cnt] = c;
@@ -1380,7 +1600,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 {
 	static NET_DATA_STATE_E net_data_state = NEED_I;
 	static u8 yin_cnt = 0;
-	
+
 	switch((unsigned char)net_data_state)
 	{
 		case (unsigned char)NEED_PLUS:
@@ -1394,7 +1614,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_Q:
 			if(c == 'Q')
 			{
@@ -1405,7 +1625,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_I:
 			if(c == 'I')
 			{
@@ -1416,7 +1636,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_U:
 			if(c == 'U')
 			{
@@ -1427,7 +1647,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_R:
 			if(c == 'R')
 			{
@@ -1438,7 +1658,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_C:
 			if(c == 'C')
 			{
@@ -1449,7 +1669,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-		
+
 		case (unsigned char)NEED_MAO:
 			if(c == ':')
 			{
@@ -1460,7 +1680,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_KONG:
 			if(c == ' ')
 			{
@@ -1471,7 +1691,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_YIN:
 			if(c == '\"')
 			{
@@ -1490,9 +1710,9 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 				yin_cnt = 0;
 			}
-				
+
 			break;
-			
+
 		case (unsigned char)NEED_r:
 			if(c == 'r')
 			{
@@ -1503,7 +1723,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_e:
 			if(c == 'e')
 			{
@@ -1514,7 +1734,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_c:
 			if(c == 'c')
 			{
@@ -1525,7 +1745,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_v:
 			if(c == 'v')
 			{
@@ -1536,7 +1756,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-				
+
 		case (unsigned char)NEED_DOU:
 			if(c == ',')
 			{
@@ -1547,7 +1767,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 				net_data_state = NEED_PLUS;
 			}
 			break;
-			
+
 		case (unsigned char)NEED_LEN_DATA:
 			if(c >= '0' && c <= '9')
 			{
@@ -1555,7 +1775,7 @@ void bg96_net_data_state_process(pBg96 *bg96,char c)
 			}
 			else if(c == 0x0D)
 			{
-				
+
 			}
 			else if(c == 0x0A)/*<len>:<data>*/
 			{

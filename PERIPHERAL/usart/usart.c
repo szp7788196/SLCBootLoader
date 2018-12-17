@@ -294,7 +294,6 @@ void TIM2_Init(u16 arr,u16 psc)
 	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure); 			//根据TIM_TimeBaseInitStruct中指定的参数初始化TIMx的时间基数单位
 
 	TIM_ITConfig(TIM2,TIM_IT_Update ,ENABLE);
-	 							//根据NVIC_InitStruct中指定的参数初始化外设NVIC寄存器
 
 	TIM_Cmd(TIM2, ENABLE);  									//使能TIMx外设
 }

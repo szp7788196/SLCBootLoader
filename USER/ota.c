@@ -1,19 +1,20 @@
 #include "ota.h"
 #include "stmflash.h"
 #include "common.h"
-#include "24cxx.h" 
+#include "24cxx.h"
 #include "usart.h"
 #include "malloc.h"
 #include "delay.h"
 #include "string.h"
 #include "bg96.h"
 #include "tcp.h"
+#include "http.h"
 #include "led.h"
 
 
-iapfun jump2app; 
- 
-u16 iapbuf[1024];  
+iapfun jump2app;
+
+u16 iapbuf[1024];
 //appxaddr:应用程序的起始地址
 //appbuf:应用程序CODE.
 //appsize:应用程序大小(字节).
@@ -35,9 +36,9 @@ void iap_write_appbin(u32 appxaddr,u8 *appbuf,u32 appsize, u8 flag)
 	{
 		cnt = 0;
 		data_pos = 0;
-		STMFLASH_Write(AppFlashAdd + (sector_pos ++) * 2048,iapbuf,1024);	
+		STMFLASH_Write(AppFlashAdd + (sector_pos ++) * 2048,iapbuf,1024);
 	}
-	
+
 	if(data_pos > 0 && flag == 1)
 	{
 		STMFLASH_Write(AppFlashAdd + (sector_pos ++) * 2048,iapbuf,(cnt * 128 + appsize) / 2);
@@ -45,7 +46,7 @@ void iap_write_appbin(u32 appxaddr,u8 *appbuf,u32 appsize, u8 flag)
 		sector_pos = 0;
 		cnt = 0;
 	}
-	
+
 	if(flag == 1)
 	{
 		cnt = 0;
@@ -56,45 +57,45 @@ void iap_write_appbin(u32 appxaddr,u8 *appbuf,u32 appsize, u8 flag)
 //appxaddr:用户代码起始地址.
 void iap_load_app(u32 appxaddr)
 {
-	jump2app=(iapfun)*(vu32*)(appxaddr+4);		//用户代码区第二个字为程序开始地址(复位地址)		
-	MSR_MSP(*(vu32*)appxaddr);					//初始化APP堆栈指针(用户代码区的第一个字用于存放栈顶地址)
-	jump2app();									//跳转到APP.
+	jump2app = (iapfun) * (vu32*)(appxaddr + 4);	//用户代码区第二个字为程序开始地址(复位地址)
+	MSR_MSP(*(vu32*)appxaddr);						//初始化APP堆栈指针(用户代码区的第一个字用于存放栈顶地址)
+	jump2app();										//跳转到APP.
 }
 
 //BootLoader退出现场，对BootLoader资源进行回收
 void BootLoader_ExitInit(void)
 {
-	TIM2->CR1 = 0;
-	TIM2->CR2 = 0;
-	TIM2->SMCR = 0;
-	TIM2->DIER = 0;
-	TIM2->SR = 0;
-	TIM2->EGR = 0;
+	TIM2->CR1 	= 0;
+	TIM2->CR2 	= 0;
+	TIM2->SMCR 	= 0;
+	TIM2->DIER 	= 0;
+	TIM2->SR 	= 0;
+	TIM2->EGR 	= 0;
 	TIM2->CCMR1 = 0;
 	TIM2->CCMR2 = 0;
-	TIM2->CCER = 0;
-	TIM2->CNT = 0;
-	TIM2->PSC = 0;
-	TIM2->ARR = 0;
-	TIM2->CCR1 = 0;
-	TIM2->CCR2 = 0;
-	TIM2->CCR3 = 0;
-	TIM2->CCR4 = 0;
-	TIM2->DCR = 0;
-	TIM2->DMAR = 0;
-	
-	EXTI->IMR = 0;
-	EXTI->EMR = 0;
-	EXTI->RTSR = 0;
-	EXTI->FTSR = 0;
+	TIM2->CCER 	= 0;
+	TIM2->CNT 	= 0;
+	TIM2->PSC 	= 0;
+	TIM2->ARR 	= 0;
+	TIM2->CCR1 	= 0;
+	TIM2->CCR2 	= 0;
+	TIM2->CCR3 	= 0;
+	TIM2->CCR4 	= 0;
+	TIM2->DCR 	= 0;
+	TIM2->DMAR 	= 0;
+
+	EXTI->IMR 	= 0;
+	EXTI->EMR 	= 0;
+	EXTI->RTSR 	= 0;
+	EXTI->FTSR 	= 0;
 	EXTI->SWIER = 0;
-	EXTI->PR = 0;
-	
-	IWDG->KR = 0;
-	IWDG->PR = 0;
-	IWDG->RLR = 0;
-	IWDG->SR = 0;
-	
+	EXTI->PR 	= 0;
+
+	IWDG->KR 	= 0;
+	IWDG->PR 	= 0;
+	IWDG->RLR 	= 0;
+	IWDG->SR 	= 0;
+
 	__set_PRIMASK(1);
 	delay_ms(10);
 }
@@ -102,7 +103,7 @@ void BootLoader_ExitInit(void)
 u8 NeedUpDateNewFirmWare(void)
 {
 	u8 ret = 0;
-	
+
 LOOP:
 	if(ReadOTAInfo(HoldReg))
 	{
@@ -135,7 +136,7 @@ LOOP:
 				goto LOOP;
 			}
 			else
-			{	
+			{
 				if((NewFirmWareVer <= 9999 && NewFirmWareVer > 0)\
 					&& (NewFirmWareBagNum <= 896 && NewFirmWareBagNum > 0)\
 					&& (LastBagByteNum <= 134 && LastBagByteNum > 0))	//版本号合法 并且 总包数合法 并且 末包字节数合法 //128 + 2 + 4 = 134
@@ -164,7 +165,7 @@ LOOP:
 		ResetOTAInfo(HoldReg);
 		goto LOOP;
 	}
-	
+
 	return ret;
 }
 
@@ -175,66 +176,52 @@ u8 SignalIntensity = 99;						//bg96的信号强度
 u8 FirmWareUpDate(void)
 {
 	u8 ret = 0;
-	time_t times_sec = 0;
+	u8 res = 0;
+	u8 led_s = 0;
+	u8 get_fail_cnt = 0;
 	
 	BG96_InitStep1(&bg96);
-	BG96_InitStep2(&bg96);
+	Http_Init(&bg96,&http);
 	
-	Tcp_Init(&bg96,&tcp);
+	RE_HARD_INIT:
+	BG96_InitStep2(&bg96);
+	ret = http->init(&http);
+	
+	if(!ret)
+	{
+		goto RE_HARD_INIT;
+	}
 
-	while(!ret)
-	{	
-		if(ConnectState == ON_SERVER)
+	while(ret)
+	{
+		SignalIntensity = bg96->get_AT_CSQ(&bg96);
+
+		res = OnServerHandle();
+		
+		if(res == 0)
 		{
-			if(GetSysTick1s() - times_sec >= 5)
-			{
-				times_sec = GetSysTick1s();
-				ConnectState = bg96->get_connect_state(&bg96);
-				SignalIntensity = bg96->get_AT_CSQ(&bg96);
-				
-//				if(IpAddress == NULL && ServerDomain != NULL)
-//				{
-//					bg96->get_AT_QIDNSGIP(&bg96,(char *)ServerDomain, &IpAddress);
-//				}
-				
-			}
+			goto RE_HARD_INIT;
+		}
+		else if(res == 0xAA)
+		{
+			ret = res;
+			break;
+		}
+		
+		led_s = !led_s;
+		
+		if(led_s)
+		{
+			RUN_LED = 1;
 		}
 		else
 		{
-			ConnectState = bg96->get_connect_state(&bg96);
-			SignalIntensity = bg96->get_AT_CSQ(&bg96);
+			RUN_LED = 0;
 		}
-		
-		switch((u8)ConnectState)
-		{
-			case (u8)UNKNOW_ERROR:					//未知错误，重启模块
-				BG96_InitStep2(&bg96);
-			break;
 
-			case (u8)GET_READY:						//模块已经就绪
-				TryToConnectToServer();
-			break;
-
-			case (u8)NEED_CLOSE:					//需要关闭移动场景
-				tcp->close(&tcp);
-			break;
-
-			case (u8)NEED_WAIT:						//延时等待
-				delay_ms(2000);
-			break;
-
-			case (u8)ON_SERVER:						//已经连接到服务器
-				ret = OnServerHandle();
-			break;
-
-			default:
-
-			break;
-		}
-		
-		delay_ms(100);
+		delay_ms(1000);
 	}
-	
+
 	return ret;
 }
 
@@ -243,14 +230,17 @@ u8 FirmWareUpDate(void)
 u8 TryToConnectToServer(void)
 {
 	u8 ret = 0;
-	
-	ret = tcp->connect(&tcp,(char *)ServerIP,(char *)ServerPort);
-	
+
+	if(ServerIP != NULL && ServerPort != NULL)
+	{
+		ret = tcp->connect(&tcp,(char *)ServerIP,(char *)ServerPort);
+	}
+
 	return ret;
 }
 
 
-u8 DownLoadBuf[512];
+u8 DownLoadBuf[1500];
 u8 SendBuf[256];
 u8 crc32_cal_buf[1024];
 u8 data_buf[134];
@@ -260,11 +250,13 @@ u8 OnServerHandle(void)
 {
 	static u8 store_times = 0;
 	u8 ret = 0;
+	u8 res = 0;
 	u16 i = 0;
 	u16 send_len = 0;
-	u16 recv_len = 0;
+//	u16 recv_len = 0;
 	u16 data_pos1 = 0;
 	u16 data_pos2 = 0;
+	u16 data_pos3 = 0;
 	u8 data_len = 0;
 	u16 crc16_cal = 0;
 	u16 crc16_read = 0;
@@ -273,14 +265,13 @@ u8 OnServerHandle(void)
 	u32 file_len = 0;
 	u16 k_num = 0;
 	u16 last_k_byte_num = 0;
-	u8 ok_buf[4] = {0x0D,0x0A,0x0D,0x0A};
 	u8 srtA_B[2] = {0,0};
 
 	if(bag_pos <= (NewFirmWareBagNum - 1))
 	{
 		memset(DownLoadBuf,0,512);
 		memset(SendBuf,0,256);
-		
+
 		if(NewFirmWareAdd == 0xAA)
 		{
 			srtA_B[0] = 'A';
@@ -289,29 +280,42 @@ u8 OnServerHandle(void)
 		{
 			srtA_B[0] = 'B';
 		}
-			
-		sprintf((char *)SendBuf,"GET /hardware/LH/V%02d.%02d%s/LightHouse%04d.bin HTTP/1.1\r\nHost: %s:%s\r\nUser-Agent: abc\r\nConnection: Keep-alive\r\nKeep-alive: timeout=10\r\n\r\n",\
-					NewFirmWareVer / 100,NewFirmWareVer % 100,srtA_B,bag_pos,ServerIP,ServerPort);
 
+//		sprintf((char *)SendBuf,"GET /hardware/SLC/V%02d.%02d%s/SLC%04d.bin HTTP/1.1\r\nHost: %s:%s\r\nUser-Agent: abc\r\nConnection: Keep-alive\r\nKeep-alive: timeout=10\r\n\r\n",\
+//					NewFirmWareVer / 100,NewFirmWareVer % 100,srtA_B,bag_pos,ServerIP,ServerPort);
 		
+		sprintf((char *)SendBuf,"http://103.48.232.122:8080/nnlightctl/hardware/SLC/V%02d.%02d%s/SLC%04d.bin\r\n",\
+					NewFirmWareVer / 100,NewFirmWareVer % 100,srtA_B,bag_pos);
+
 		send_len = strlen((char *)SendBuf);
-		send_len = tcp->send(&tcp,SendBuf,send_len);
+//		send_len = tcp->send(&tcp,SendBuf,send_len);
 		if(send_len != 0)
 		{
-			delay_ms(100);
-			recv_len = tcp->read(&tcp,DownLoadBuf);
+			UsartSendString(USART1,SendBuf,send_len);
 			
-			if(recv_len != 0)
+//			delay_ms(1000);
+//			recv_len = tcp->read(&tcp,DownLoadBuf);
+			
+			res = http->get(&http,(char *)SendBuf,60,30);
+			
+			if(res == 1)
+			{
+				delay_ms(100);
+				res = http->read(&http,DownLoadBuf,80);
+			}
+
+			if(res == 1)
 			{
 //				UsartSendString(USART1,DownLoadBuf,recv_len);
-				
+
 				if(MyStrstr(DownLoadBuf, (u8 *)"HTTP/1.1 200 OK", 512, 15) != 0xFFFF && MyStrstr(DownLoadBuf, (u8 *)"Content-Length:", 512, 15) != 0xFFFF)
 				{
 					if(bag_pos <= (NewFirmWareBagNum - 2))
 					{
 						data_pos1 = MyStrstr(DownLoadBuf, (u8 *)"Content-Length:", 512, 15);
-						data_pos2 = MyStrstr(DownLoadBuf, ok_buf, 512, 4);
-						
+						data_pos2 = MyStrstr(DownLoadBuf, (u8 *)"\r\nDate: ", 512, 8);
+						data_pos3 = MyStrstr(DownLoadBuf, (u8 *)"GMT\r\n\r\n", 512, 7);
+
 						if(data_pos1 != 0xFFFF && data_pos2 != 0xFFFF && data_pos2 > data_pos1)
 						{
 							if(data_pos2 - data_pos1 == 19)
@@ -320,18 +324,20 @@ u8 OnServerHandle(void)
 								if(data_len == 130)
 								{
 									memset(data_buf,0,134);
-									memcpy(data_buf,&DownLoadBuf[data_pos2 + 4],130);
-									
-									crc16_read=(u16)data_buf[128];//获取接收到的校验值
-									crc16_read=crc16_read<<8;
-									crc16_read=crc16_read|(u16)data_buf[129];
-									
+									memcpy(data_buf,&DownLoadBuf[data_pos3 + 7],130);
+
+									crc16_read = (u16)data_buf[128];//获取接收到的校验值
+									crc16_read = crc16_read << 8;
+									crc16_read = crc16_read | (u16)data_buf[129];
+
 									crc16_cal = CRC16(data_buf,128);
-									
+
 									if(crc16_read == crc16_cal)
 									{
 										iap_write_appbin(AppFlashAdd + 128 * bag_pos,data_buf,128,0);
 										bag_pos ++;
+										
+										ret = 1;
 									}
 								}
 							}
@@ -339,8 +345,10 @@ u8 OnServerHandle(void)
 					}
 					else if(bag_pos == (NewFirmWareBagNum - 1))
 					{
-						data_pos1 = MyStrstr(DownLoadBuf, "Content-Length:", 512, 15);
-						data_pos2 = MyStrstr(DownLoadBuf, ok_buf, 512, 4);
+						data_pos1 = MyStrstr(DownLoadBuf, (u8 *)"Content-Length:", 512, 15);
+						data_pos2 = MyStrstr(DownLoadBuf, (u8 *)"\r\nDate: ", 512, 8);
+						data_pos3 = MyStrstr(DownLoadBuf, (u8 *)"GMT\r\n\r\n", 512, 7);
+						
 						if(data_pos1 != 0xFFFF && data_pos2 != 0xFFFF && data_pos2 > data_pos1)
 						{
 							if(data_pos2 - data_pos1 == 19)
@@ -358,32 +366,32 @@ u8 OnServerHandle(void)
 							if(data_len > 0 && data_len <= 134)
 							{
 								memset(data_buf,0,134);
-								memcpy(data_buf,&DownLoadBuf[data_pos2 + 4],data_len);
-								crc16_read=(u16)data_buf[data_len - 6];//获取接收到的校验值
-								crc16_read=crc16_read<<8;
-								crc16_read=crc16_read|(u16)data_buf[data_len - 5];
-								
+								memcpy(data_buf,&DownLoadBuf[data_pos3 + 7],data_len);
+								crc16_read = (u16)data_buf[data_len - 6];//获取接收到的校验值
+								crc16_read = crc16_read << 8;
+								crc16_read = crc16_read | (u16)data_buf[data_len - 5];
+
 								crc16_cal = CRC16(data_buf,data_len - 6);
-								
+
 								if(crc16_read == crc16_cal)
 								{
 									iap_write_appbin(AppFlashAdd + 128 * bag_pos,data_buf,data_len - 6,1);
 									bag_pos ++;
-									
+
 									crc32_read = (((u32)data_buf[data_len - 4]) << 24) \
 													+ (((u32)data_buf[data_len - 3]) << 16) \
 													+ (((u32)data_buf[data_len - 2]) << 8) \
 													+ (((u32)data_buf[data_len - 1]));
-									
+
 									file_len = 128 * (NewFirmWareBagNum - 1) + (data_len - 6);
-									
+
 									k_num = file_len / 1024;
 									last_k_byte_num = file_len % 1024;
 									if(last_k_byte_num > 0)
 									{
 										k_num += 1;
 									}
-									
+
 									for(i = 0; i < k_num; i ++)
 									{
 										memset(crc32_cal_buf,0,1024);
@@ -406,7 +414,7 @@ u8 OnServerHandle(void)
 											}
 										}
 									}
-									
+
 									if(crc32_read == crc32_cal)
 									{
 										__disable_irq();		//关闭全局中断，以免扰乱读写EEPROM
@@ -414,15 +422,15 @@ u8 OnServerHandle(void)
 										{
 											ResetOTAInfo(HoldReg);
 											ReadOTAInfo(HoldReg);
-											
+
 											if(ReadOTAInfo(HoldReg))
 											{
 												__enable_irq();	//恢复全局中断
 												return 0xAA;
 											}
-											
+
 											store_times ++;
-											
+
 											if(store_times > 5)
 											{
 												__enable_irq();	//恢复全局中断
@@ -438,11 +446,11 @@ u8 OnServerHandle(void)
 				}
 			}
 		}
-		
-		printf("%3d/%3d   %3d%%\r",bag_pos,NewFirmWareBagNum,(u8)((float)bag_pos / (float)NewFirmWareBagNum * 100.0f));	//打印更新进度
-		
+
+//		printf("%3d/%3d   %3d%%\r",bag_pos,NewFirmWareBagNum,(u8)((float)bag_pos / (float)NewFirmWareBagNum * 100.0f));	//打印更新进度
+
 	}
-	
+
 	return ret;
 }
 

@@ -637,6 +637,11 @@
               <FileType>1</FileType>
               <FilePath>..\NET\tcp.c</FilePath>
             </File>
+            <File>
+              <FileName>http.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\NET\http.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>

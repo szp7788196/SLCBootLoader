@@ -20,7 +20,7 @@
 
 #define BG96_PRINTF_RX_BUF
 
-#define CMD_DATA_BUFFER_SIZE 256
+#define CMD_DATA_BUFFER_SIZE 1500
 #define NET_DATA_BUFFER_SIZE 1500
 
 #define TIMEOUT_1S 1000
@@ -68,6 +68,7 @@
 #define TIMEOUT_175S 175000
 #define TIMEOUT_180S 180000
 
+#define IMEI_LEN	15
 
 #define NET_NULL 0x00000000
 
@@ -108,13 +109,13 @@ typedef enum
 	NEED_DOU,
 	NEED_0D,
 	NEED_0A,
-	
+
     NEED_ID_DATA,
     NEED_LEN_DATA,
     NEED_COLON ,
     NEED_USER_DATA ,
     STATE_ERROR ,
-	
+
 } NET_DATA_STATE_E;
 
 //BG96的连接状态 只有在就绪状态才可以连接
@@ -152,7 +153,7 @@ struct BG96
 {
 	char        	*rx_cmd_buf;
     unsigned short  rx_cnt;
-	
+
 	void			(*hard_init)(pBg96 *bg96);
 	void			(*hard_enable)(pBg96 *bg96);
 	void			(*hard_disable)(pBg96 *bg96);
@@ -196,20 +197,24 @@ struct BG96
 	unsigned char 	(*get_AT_QISEND)(pBg96 *bg96);
 	unsigned char 	(*get_AT_QIDNSGIP)(pBg96 *bg96,const char *domain, unsigned char **ip);
 	unsigned char 	(*get_AT_QPING)(pBg96 *bg96,const char *host, char *msg);
+	unsigned char   (*get_AT_GSN)(pBg96 *bg96);
 
 	unsigned char 	(*set_AT_QGPS)(pBg96 *bg96);
 	unsigned char 	(*set_AT_QGPSLOC)(pBg96 *bg96,char *msg);
 	unsigned char 	(*set_AT_QGPSEND)(pBg96 *bg96);
-	
+
 	unsigned char 	(*set_AT_QNTP)(pBg96 *bg96,char *server,unsigned short port,char *msg);
+	
+	unsigned char 	(*set_AT_QHTTPCFG)(pBg96 *bg96,char *cmd,unsigned char id);
+	unsigned char 	(*set_AT_QHTTPURL)(pBg96 *bg96,char *url,unsigned char url_len,unsigned char time_out);
+	unsigned char 	(*get_AT_QHTTPGET)(pBg96 *bg96,unsigned char time_out);
+	unsigned char 	(*get_AT_QHTTPREAD)(pBg96 *bg96,unsigned char *buf,unsigned char time_out);
 
     pRingBuf     	net_buf;
     unsigned short  net_data_rx_cnt;
     unsigned short  net_data_len;
     unsigned char   net_data_id;
 
-//	char        	*rx_cmd_buf;
-//    unsigned short  rx_cnt;
     void        	(*clear_rx_cmd_buffer)(pBg96 *bg96);
     void        	(*get_char)(pBg96 *bg96);
 
@@ -219,6 +224,7 @@ struct BG96
     void        	(*print_cmd)(pBg96 *bg96,CMD_STATE_E cmd);
     CMD_STATE_E 	(*wait_cmd1)(pBg96 *bg96,unsigned int wait_time);
     CMD_STATE_E 	(*wait_cmd2)(pBg96 *bg96,const char *spacial_target, unsigned int wait_time);
+	CMD_STATE_E 	(*wait_cmd3)(pBg96 *bg96,unsigned char *str,unsigned short str_len, unsigned int wait_time);
     unsigned char   (*wait_bg96_mode)(pBg96 *bg96,GPRS_MODE_E mode);
 
 	unsigned char   init_ok;
@@ -228,6 +234,8 @@ struct BG96
 	CIP_MUX_MODE	cip_mux_mode;
 
 	USART_TypeDef* 	USARTx;
+
+	char   			*imei;
 
 	void 			(*uart_interrupt_event)(pBg96 *bg96);
     void 			(*net_data_state_process)(pBg96 *bg96,char c);
@@ -281,12 +289,18 @@ unsigned char 	bg96_set_AT_QISEND(pBg96 *bg96,unsigned char *buffer, unsigned in
 unsigned char 	bg96_get_AT_QISEND(pBg96 *bg96);
 unsigned char 	bg96_get_AT_QIDNSGIP(pBg96 *bg96,const char *domain, unsigned char **ip);
 unsigned char 	bg96_get_AT_QPING(pBg96 *bg96,const char *host, char *msg);
+unsigned char   bg96_get_AT_GSN(pBg96 *bg96);
 
 unsigned char 	bg96_set_AT_QGPS(pBg96 *bg96);
 unsigned char 	bg96_set_AT_QGPSLOC(pBg96 *bg96,char *msg);
 unsigned char 	bg96_set_AT_QGPSEND(pBg96 *bg96);
 
-unsigned char bg96_set_AT_QNTP(pBg96 *bg96,char *server,unsigned short port,char *msg);
+unsigned char 	bg96_set_AT_QNTP(pBg96 *bg96,char *server,unsigned short port,char *msg);
+
+unsigned char 	bg96_set_AT_QHTTPCFG(pBg96 *bg96,char *cmd,unsigned char id);
+unsigned char 	bg96_set_AT_QHTTPURL(pBg96 *bg96,char *url,unsigned char url_len,unsigned char time_out);
+unsigned char 	bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out);
+unsigned char 	bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out);
 
 
 void        	bg96_clear_rx_cmd_buffer(pBg96 *bg96);
@@ -296,6 +310,7 @@ void        	bg96_print_rx_buf(pBg96 *bg96);
 void        	bg96_print_cmd(pBg96 *bg96,CMD_STATE_E cmd);
 CMD_STATE_E 	bg96_wait_cmd1(pBg96 *bg96,unsigned int wait_time);
 CMD_STATE_E 	bg96_wait_cmd2(pBg96 *bg96,const char *spacial_target, unsigned int wait_time);
+CMD_STATE_E 	bg96_wait_cmd3(pBg96 *bg96,unsigned char *str,unsigned short str_len, unsigned int wait_time);
 unsigned char   bg96_wait_bg96_mode(pBg96 *bg96,GPRS_MODE_E mode);
 
 void 			bg96_uart_interrupt_event(pBg96 *bg96);

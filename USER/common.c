@@ -851,10 +851,10 @@ void ResetOTAInfo(u8 *hold_reg)
 	u16 crc_code = 0;
 	u16 i = 0;
 	
-	HaveNewFirmWare   = 0;
-	NewFirmWareBagNum = 0;
+	HaveNewFirmWare   = 0xAA;
+	NewFirmWareBagNum = 345;
 	NewFirmWareVer    = 101;
-	LastBagByteNum    = 0;
+	LastBagByteNum    = 58;
 	
 	if(NewFirmWareAdd != 0xAA && NewFirmWareAdd != 0x55)
 	{

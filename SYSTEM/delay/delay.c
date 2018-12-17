@@ -58,7 +58,7 @@ void delay_init(u8 SYSCLK)
 	fac_us = SYSCLK;
 	
 	SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
-	SysTick->LOAD = fac_us;
+	SysTick->LOAD = fac_us * 1000;
 	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
 
 #if SYSTEM_SUPPORT_OS
