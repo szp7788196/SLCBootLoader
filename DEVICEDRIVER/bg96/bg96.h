@@ -207,8 +207,9 @@ struct BG96
 	
 	unsigned char 	(*set_AT_QHTTPCFG)(pBg96 *bg96,char *cmd,unsigned char id);
 	unsigned char 	(*set_AT_QHTTPURL)(pBg96 *bg96,char *url,unsigned char url_len,unsigned char time_out);
-	unsigned char 	(*get_AT_QHTTPGET)(pBg96 *bg96,unsigned char time_out);
-	unsigned char 	(*get_AT_QHTTPREAD)(pBg96 *bg96,unsigned char *buf,unsigned char time_out);
+	unsigned short 	(*get_AT_QHTTPGET1)(pBg96 *bg96,unsigned char time_out);
+	unsigned short 	(*get_AT_QHTTPGET2)(pBg96 *bg96,unsigned char rsptime,char *url,unsigned char input_time);
+	unsigned short 	(*get_AT_QHTTPREAD)(pBg96 *bg96,unsigned char *buf,unsigned char time_out,unsigned char resp_hrad);
 
     pRingBuf     	net_buf;
     unsigned short  net_data_rx_cnt;
@@ -299,8 +300,9 @@ unsigned char 	bg96_set_AT_QNTP(pBg96 *bg96,char *server,unsigned short port,cha
 
 unsigned char 	bg96_set_AT_QHTTPCFG(pBg96 *bg96,char *cmd,unsigned char id);
 unsigned char 	bg96_set_AT_QHTTPURL(pBg96 *bg96,char *url,unsigned char url_len,unsigned char time_out);
-unsigned char 	bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out);
-unsigned char 	bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out);
+unsigned short 	bg96_get_AT_QHTTPGET1(pBg96 *bg96,unsigned char time_out);
+unsigned short 	bg96_get_AT_QHTTPGET2(pBg96 *bg96,unsigned char rsptime,char *url,unsigned char input_time);
+unsigned short 	bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out,unsigned char resp_hrad);
 
 
 void        	bg96_clear_rx_cmd_buffer(pBg96 *bg96);

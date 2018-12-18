@@ -37,6 +37,8 @@
 
 
 //#define STM32F103RET6
+#define SMALLER_BOARD							//单灯控制器PCB板类型
+//#define NEW_BOARD								//新单灯控制器 支持PWM 数字 0~10V DALI
 
 #ifdef STM32F103RET6
 

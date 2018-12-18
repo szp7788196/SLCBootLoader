@@ -95,10 +95,11 @@ unsigned char BG96_InitStep1(pBg96 *bg96)
 
 	(*bg96)->set_AT_QNTP					= bg96_set_AT_QNTP;
 	
-	(*bg96)->set_AT_QHTTPCFG				=bg96_set_AT_QHTTPCFG;
-	(*bg96)->set_AT_QHTTPURL				=bg96_set_AT_QHTTPURL;
-	(*bg96)->get_AT_QHTTPGET				=bg96_get_AT_QHTTPGET;
-	(*bg96)->get_AT_QHTTPREAD				=bg96_get_AT_QHTTPREAD;
+	(*bg96)->set_AT_QHTTPCFG				= bg96_set_AT_QHTTPCFG;
+	(*bg96)->set_AT_QHTTPURL				= bg96_set_AT_QHTTPURL;
+	(*bg96)->get_AT_QHTTPGET1				= bg96_get_AT_QHTTPGET1;
+	(*bg96)->get_AT_QHTTPGET2				= bg96_get_AT_QHTTPGET2;
+	(*bg96)->get_AT_QHTTPREAD				= bg96_get_AT_QHTTPREAD;
 
     (*bg96)->clear_rx_cmd_buffer 			= bg96_clear_rx_cmd_buffer;
     (*bg96)->get_char 						= bg96_get_char;
@@ -1362,7 +1363,7 @@ unsigned char bg96_set_AT_QHTTPURL(pBg96 *bg96,char *url,unsigned char url_len,u
         if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "CONNECT") != -1)
 		{
 			(*bg96)->clear_rx_cmd_buffer(bg96);
-
+			delay_ms(100);
 			printf("%s\r\n", url);
 
 			if((*bg96)->wait_cmd2(bg96,"OK", TIMEOUT_2S) == RECEIVED)
@@ -1383,9 +1384,10 @@ unsigned char bg96_set_AT_QHTTPURL(pBg96 *bg96,char *url,unsigned char url_len,u
 }
 
 //发送HTTP的GET请求
-unsigned char bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out)
+unsigned short bg96_get_AT_QHTTPGET1(pBg96 *bg96,unsigned char time_out)
 {
-	unsigned char ret = 0;
+	unsigned short ret = 0;
+	unsigned char buf[6] = {0,0,0,0,0,0};
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
     printf("AT+QHTTPGET=%d\r\n", time_out);
@@ -1397,7 +1399,51 @@ unsigned char bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out)
 			{
 				if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "+QHTTPGET: 0") != -1)
 				{
-					ret = 1;
+					get_str1((unsigned char *)(*bg96)->rx_cmd_buf, ",", 2, "\r\n", 4, buf);
+					
+					ret = StringToInt(buf);
+				}
+			}
+		}
+    }
+
+    (*bg96)->bg96_mode = NET_MODE;
+#ifdef BG96_PRINTF_RX_BUF
+	(*bg96)->print_rx_buf(bg96);
+#endif
+    return ret;
+}
+
+//发送HTTP的GET请求
+unsigned short bg96_get_AT_QHTTPGET2(pBg96 *bg96,unsigned char rsptime,char *url,unsigned char input_time)
+{
+	unsigned short ret = 0;
+	unsigned char buf[6] = {0,0,0,0,0,0};
+    (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
+    (*bg96)->clear_rx_cmd_buffer(bg96);
+    printf("AT+QHTTPGET=%d,%d,%d\r\n", rsptime,strlen(url),input_time);
+    if((*bg96)->wait_cmd2(bg96,"CONNECT\r\n", TIMEOUT_20S) == RECEIVED)
+    {
+        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "CONNECT\r\n") != -1)
+		{
+			(*bg96)->clear_rx_cmd_buffer(bg96);
+			
+			printf("%s", url);
+			{
+				if((*bg96)->wait_cmd2(bg96,"OK\r\n", TIMEOUT_2S) == RECEIVED)
+				{
+					if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "OK\r\n") != -1)
+					{
+						if((*bg96)->wait_cmd2(bg96,"+QHTTPGET:", rsptime * 1000 + TIMEOUT_2S) == RECEIVED)
+						{
+							if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "+QHTTPGET: 0") != -1)
+							{
+								get_str1((unsigned char *)(*bg96)->rx_cmd_buf, ",", 2, "\r\n", 4, buf);
+					
+								ret = StringToInt(buf);
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1411,21 +1457,48 @@ unsigned char bg96_get_AT_QHTTPGET(pBg96 *bg96,unsigned char time_out)
 }
 
 //读取HTTP回复数据包
-unsigned char bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out)
+unsigned short bg96_get_AT_QHTTPREAD(pBg96 *bg96,unsigned char *buf,unsigned char time_out,unsigned char resp_hrad)
 {
-	unsigned char ret = 0;
+	unsigned short ret = 0;
+	unsigned short pos_s = 0;
+	unsigned short pos_e = 0;
+	unsigned short data_len = 0;
     (*bg96)->wait_bg96_mode(bg96,CMD_MODE);
     (*bg96)->clear_rx_cmd_buffer(bg96);
     printf("AT+QHTTPREAD=%d\r\n", time_out);
     if((*bg96)->wait_cmd3(bg96,"+QHTTPREAD: 0", 13,time_out * 1000 + TIMEOUT_2S) == RECEIVED)
     {
-        if(search_str((unsigned char *)(*bg96)->rx_cmd_buf, "GMT\r\n\r\n") != -1)
+		if(resp_hrad)
 		{
-			memset(buf,0,(*bg96)->rx_cnt);
+			pos_s = MyStrstr((unsigned char *)(*bg96)->rx_cmd_buf, "GMT\r\n\r\n", (*bg96)->rx_cnt, 7);
+			pos_e = MyStrstr((unsigned char *)(*bg96)->rx_cmd_buf, "\r\nOK\r\n\r\n", (*bg96)->rx_cnt, 8);
 			
-			memcpy(buf,(*bg96)->rx_cmd_buf,(*bg96)->rx_cnt);
+			if(pos_s != 0xFFFF && pos_e != 0xFFFF && pos_e > pos_s)
+			{
+				data_len = pos_e - pos_s - 7;
+				
+				memset(buf,0,(*bg96)->rx_cnt);
+
+				memcpy(buf,&((*bg96)->rx_cmd_buf[pos_s + 7]),data_len);
+				
+				ret = data_len;
+			}
+		}
+		else
+		{
+			pos_s = MyStrstr((unsigned char *)(*bg96)->rx_cmd_buf, "CONNECT\r\n", (*bg96)->rx_cnt, 9);
+			pos_e = MyStrstr((unsigned char *)(*bg96)->rx_cmd_buf, "\r\nOK\r\n\r\n", (*bg96)->rx_cnt, 8);
 			
-			ret = 1;
+			if(pos_s != 0xFFFF && pos_e != 0xFFFF && pos_e > pos_s)
+			{
+				data_len = pos_e - pos_s - 9;
+				
+				memset(buf,0,(*bg96)->rx_cnt);
+
+				memcpy(buf,&((*bg96)->rx_cmd_buf[pos_s + 9]),data_len);
+				
+				ret = data_len;
+			}
 		}
     }
 

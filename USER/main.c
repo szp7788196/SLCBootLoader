@@ -27,7 +27,7 @@ int main(void)
 
 	__set_PRIMASK(0);	//开启全局中断
 
-	ResetOTAInfo(HoldReg);
+//	ResetOTAInfo(HoldReg);
 //	mem_init();
 
 	IWDG_Feed();				//喂看门狗
