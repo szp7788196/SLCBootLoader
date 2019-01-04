@@ -3,6 +3,7 @@
 
 #include "sys.h"
 #include "ringbuf.h"
+#include "common.h"
 
 
 #define BG96_PWRKEY_HIGH	GPIO_SetBits(GPIOC,GPIO_Pin_1)
@@ -11,8 +12,13 @@
 #define BG96_RST_HIGH		GPIO_SetBits(GPIOC,GPIO_Pin_2)
 #define BG96_RST_LOW		GPIO_ResetBits(GPIOC,GPIO_Pin_2)
 
+#ifdef NEW_BOARD
+#define BG96_PWREN_HIGH		GPIO_SetBits(GPIOB,GPIO_Pin_12)
+#define BG96_PWREN_LOW		GPIO_ResetBits(GPIOB,GPIO_Pin_12)
+#else
 #define BG96_PWREN_HIGH		GPIO_SetBits(GPIOC,GPIO_Pin_3)
 #define BG96_PWREN_LOW		GPIO_ResetBits(GPIOC,GPIO_Pin_3)
+#endif
 
 #define READ_BG96_STATUS  	GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_5)
 #define READ_BG96_NET  		GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_6)

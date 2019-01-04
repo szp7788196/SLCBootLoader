@@ -84,25 +84,25 @@ unsigned char http_init(pHttp *http)
 }
 
 //发送URL内容和GET请求
-unsigned short http_get(pHttp *http,char *url,unsigned char *out_buf,unsigned char time_out1,unsigned char time_out2)
+unsigned short http_get(pHttp *http,char *url,unsigned char *out_buf,unsigned char rsptime,unsigned char readtime)
 {
 	unsigned short ret = 0;
 	unsigned short recv_len = 0;
 	
 	if((*http)->customize_req_head == 0)
 	{
-		ret = (*http)->bg96->set_AT_QHTTPURL(&((*http)->bg96),url,strlen(url) - 2,time_out1);
+		ret = (*http)->bg96->set_AT_QHTTPURL(&((*http)->bg96),url,strlen(url) - 2,60);
 	
 		if(ret == 1)
 		{
-			delay_ms(100);
+			delay_ms(50);
 			
-			ret = (*http)->bg96->get_AT_QHTTPGET1(&((*http)->bg96),time_out2);
+			ret = (*http)->bg96->get_AT_QHTTPGET1(&((*http)->bg96),rsptime);
 		}
 	}
 	else
 	{
-		ret = (*http)->bg96->get_AT_QHTTPGET2(&((*http)->bg96),time_out1,url,time_out2);
+		ret = (*http)->bg96->get_AT_QHTTPGET2(&((*http)->bg96),rsptime,url,60);
 	}
 	
 	if(ret)
@@ -110,9 +110,9 @@ unsigned short http_get(pHttp *http,char *url,unsigned char *out_buf,unsigned ch
 #ifdef DEBUG_LOG
 		UsartSendString(USART1, "http request get success.\r\n", 27);
 #endif
-		delay_ms(100);
+		delay_ms(50);
 		
-		recv_len = (*http)->bg96->get_AT_QHTTPREAD(&((*http)->bg96),out_buf,time_out1,(*http)->resp_head);
+		recv_len = (*http)->bg96->get_AT_QHTTPREAD(&((*http)->bg96),out_buf,readtime,(*http)->resp_head);
 		
 		if(ret == recv_len)
 		{

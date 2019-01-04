@@ -2,7 +2,7 @@
 #include "usart.h"
 #include "common.h"
 #include "bg96.h"
-
+#include "led.h"
 
 u16 Usart1RxCnt = 0;
 u16 OldUsart1RxCnt = 0;
@@ -300,7 +300,9 @@ void TIM2_Init(u16 arr,u16 psc)
 
 void TIM2_IRQHandler(void)
 {
-	static u8 tick_10ms = 0;
+	static u8 tick_10ms1 = 0;
+	static u8 tick_10ms2 = 0;
+	static u8 led_s = 0;
 
 	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) 			//检查指定的TIM中断发生与否:TIM 中断源
 	{
@@ -310,12 +312,31 @@ void TIM2_IRQHandler(void)
 
 		Usart1ReciveFrameEnd();		//检测USART1是否接收数据结束
 
-		tick_10ms ++;
-		if(tick_10ms >= 10)
+		tick_10ms1 ++;
+		if(tick_10ms1 >= 10)
 		{
-			tick_10ms = 0;
+			tick_10ms1 = 0;
 
 			SysTick100msAdder();	//100ms滴答计数器累加
+			
+			led_s = !led_s;
+
+			if(led_s)
+			{
+				RUN_LED = 1;
+			}
+			else
+			{
+				RUN_LED = 0;
+			}
+		}
+		
+		tick_10ms2 ++;
+		if(tick_10ms2 >= 100)
+		{
+			tick_10ms2 = 0;
+			
+			IWDG_Feed();			//喂看门狗
 		}
 	}
 }

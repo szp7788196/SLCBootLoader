@@ -128,7 +128,7 @@ LOOP:
 				}
 			}
 		}
-		else if(HaveNewFirmWare == 0xAA)	//有新的固件需要更新
+		else						//有新的固件需要更新
 		{
 			if(NewFirmWareAdd != 0xAA && NewFirmWareAdd != 0x55)
 			{
@@ -177,50 +177,65 @@ u8 FirmWareUpDate(void)
 {
 	u8 ret = 0;
 	u8 res = 0;
-	u8 led_s = 0;
-	
+	u8 err_cnt = 0;
+
 	BG96_InitStep1(&bg96);
 	Http_Init(&bg96,&http,0,0);
-	
+
 	RE_HARD_INIT:
 	BG96_InitStep2(&bg96);
 	ret = http->init(&http);
-	
+
 	if(!ret)
 	{
 		goto RE_HARD_INIT;
 	}
+	
+	delay_ms(500);
 
 	while(ret)
 	{
 		SignalIntensity = bg96->get_AT_CSQ(&bg96);
 
-		delay_ms(100);
-		
-		res = OnServerHandle();
-		
-		if(res == 0)
+		res = OnServerHandle();		//HTTP的GET请求以及HTTP响应包的解析，并将解析到的数据存入内部FLASH
+
+		if(res == 0)				//普通网络连接错误
 		{
+			err_cnt = 0;			//错误计数清零
 			goto RE_HARD_INIT;
 		}
-		else if(res == 0xAA)
+		else if(res == 0xAA)		//固件包接收完成
 		{
-			ret = res;
+			ret = 0xAA;
 			break;
 		}
-		
-		led_s = !led_s;
-		
-		if(led_s)
+		else if(res != 1)						//其他错误:校验、数据长度、包数、URL等错误
 		{
-			RUN_LED = 1;
+			if((err_cnt ++) >= 5)				//错误数超过5次取消OTA，返回上个版本运行
+			{
+				if(NewFirmWareAdd == 0xAA)
+				{
+					NewFirmWareAdd = 0x55;
+					AppFlashAdd = APP2_FLASH_ADD;
+				}
+				else if(NewFirmWareAdd == 0x55)
+				{
+					NewFirmWareAdd = 0xAA;
+					AppFlashAdd = APP1_FLASH_ADD;
+				}
+				
+				ResetOTAInfo(HoldReg);
+				
+				ret = 0xAA;
+				break;
+			}
 		}
 		else
 		{
-			RUN_LED = 0;
+			err_cnt = 0;			//错误计数清零
 		}
 
-		delay_ms(1000);
+		delay_ms(500);
 	}
 
 	return ret;
@@ -275,10 +290,10 @@ u8 OnServerHandle(void)
 		{
 			srtA_B[0] = 'B';
 		}
-		
+
 		sprintf((char *)SendBuf,"http://103.48.232.122:8080/nnlightctl/hardware/SLC/V%02d.%02d%s/SLC%04d.bin\r\n",\
 					NewFirmWareVer / 100,NewFirmWareVer % 100,srtA_B,bag_pos);
-		
+
 //		sprintf((char *)SendBuf,"GET /nnlightctl/hardware/SLC/V%02d.%02d%s/SLC%04d.bin HTTP/1.1\r\nHost: 103.48.232.122:8080\r\nUser-Agent: abc\r\nConnection: Keep-alive\r\nKeep-alive: timeout=10\r\n\r\n",\
 //					NewFirmWareVer / 100,NewFirmWareVer % 100,srtA_B,bag_pos);
 
@@ -287,9 +302,9 @@ u8 OnServerHandle(void)
 		if(send_len != 0)
 		{
 			UsartSendString(USART1,SendBuf,send_len);
-			
-			data_len = http->get(&http,(char *)SendBuf,DownLoadBuf,60,30);
-			
+
+			data_len = http->get(&http,(char *)SendBuf,DownLoadBuf,15,30);
+
 			if(data_len != 0)
 			{
 				if(bag_pos <= (NewFirmWareBagNum - 2))
@@ -306,9 +321,17 @@ u8 OnServerHandle(void)
 						{
 							iap_write_appbin(AppFlashAdd + 128 * bag_pos,DownLoadBuf,128,0);
 							bag_pos ++;
-							
+
 							ret = 1;
 						}
+						else	//普通包CRC16错误
+						{
+							ret = 2;
+						}
+					}
+					else		//普通包长度错误
+					{
+						ret = 4;
 					}
 				}
 				else if(bag_pos == (NewFirmWareBagNum - 1))
@@ -326,10 +349,10 @@ u8 OnServerHandle(void)
 							iap_write_appbin(AppFlashAdd + 128 * bag_pos,DownLoadBuf,data_len - 6,1);
 							bag_pos ++;
 
-							crc32_read = (((u32)DownLoadBuf[data_len - 4]) << 24) \
-											+ (((u32)DownLoadBuf[data_len - 3]) << 16) \
-											+ (((u32)DownLoadBuf[data_len - 2]) << 8) \
-											+ (((u32)DownLoadBuf[data_len - 1]));
+							crc32_read = (((u32)DownLoadBuf[data_len - 1]) << 24) \
+											+ (((u32)DownLoadBuf[data_len - 2]) << 16) \
+											+ (((u32)DownLoadBuf[data_len - 3]) << 8) \
+											+ (((u32)DownLoadBuf[data_len - 4]));
 
 							file_len = 128 * (NewFirmWareBagNum - 1) + (data_len - 6);
 
@@ -387,11 +410,40 @@ u8 OnServerHandle(void)
 								}
 								while(!ReadOTAInfo(HoldReg));
 							}
+							else		//整包CRC32错误
+							{
+								bag_pos --;
+								ret = 3;
+							}
+						}
+						else			//末包CRC16错误
+						{
+							ret = 2;
 						}
 					}
+					else				//末包数据长度错误
+					{
+						ret = 4;
+					}
+				}
+				else					//数据包个数错误
+				{
+					ret = 5;
 				}
 			}
+			else						//没有数据返回、可能是超时、服务器等原因
+			{
+				ret = 0;
+			}
 		}
+		else							//URL填充错误
+		{
+			ret = 6;
+		}
+	}
+	else								//数据包个数错误
+	{
+		ret = 5;
 	}
 
 	return ret;
